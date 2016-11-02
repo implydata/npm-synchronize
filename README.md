@@ -20,7 +20,7 @@ Of course, later on you'll want to actually publish your stuff, but this is take
 
 `npm-synchronize -i ~/path/to/dependencyProject -o ~/path/to/mainProject`
 
-### CLI Alternative usage (from a config file)
+### CLI alternative usage (from a config file)
 npm-synchronize can be configured through a config file (`npm-synchronize -h` for more information).
 
 ### Module usage
