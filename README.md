@@ -16,9 +16,22 @@ Of course, later on you'll want to actually publish your stuff, but this is take
 ### Installation
 `npm i -g npm-synchronize`
 
-### Usage
+### CLI
 
 `npm-synchronize -i ~/path/to/dependencyProject -o ~/path/to/mainProject`
 
-### Alternative usage (from a config file)
+### CLI Alternative usage (from a config file)
 npm-synchronize can be configured through a config file (`npm-synchronize -h` for more information).
+
+### Module usage
+```
+const watch = require('npm-synchronize);
+
+watch('~/path/to/dependencyProject', ['~/path/to/mainProject'])
+  .then(w => {
+    // either call w.waitForUpdate() to get a promise that'll be resolved each time there's an update,
+    // or w.close() to close the watcher
+  })
+;
+
+```
