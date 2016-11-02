@@ -1,6 +1,6 @@
 {
   "name": "npm-synchronize",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A tool to ease development of dependant npm projects",
   "main": "bin/watch.js",
   "scripts": {
@@ -17,6 +17,7 @@
     "potato"
   ],
   "dependencies": {
+    "chalk": "^1.1.3",
     "chokidar": "1.6.0",
     "gunzip-maybe": "1.3.1",
     "lodash.debounce": "4.0.8",

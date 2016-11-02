@@ -9,6 +9,7 @@ const gunzip = require('gunzip-maybe');
 const fs = require('fs')
 const debounce = require('lodash.debounce');
 const yargs = require('yargs');
+const chalk = require('chalk');
 
 const argv = yargs
   .usage([
@@ -117,7 +118,7 @@ const removeTarBalls = (paths) => {
 
 const getFilesToWatch = (input, sourcePkg) => {
   if (!sourcePkg.files) {
-    console.warn(`Watching entire directory (${input}) for ${sourcePkg.name}, this might be hazardous...`);
+    warn(`Watching entire directory (${input}) for ${sourcePkg.name}, this might be hazardous...`);
     return [pathUtils.resolve(input)];
   }
 
@@ -147,6 +148,13 @@ const gatherLinks = function(input, output) {
   return links;
 };
 
+const indent = function(lines, indentLevel=2) {
+  var spaces = '';
+  for (var i = 0; i < indentLevel; i++) spaces += ' ';
+
+  return lines.map(l => spaces + l);
+};
+
 const watch = function(source, targets) {
   let sourcePkg = loadJSON(pathUtils.resolve(source, 'package.json'));
 
@@ -154,15 +162,21 @@ const watch = function(source, targets) {
   let watcher = chokidar.watch(filesToWatch, {ignored: /[\/\\]\./});
 
   watcher.on('ready', () => {
-    console.log('Watching files in ' + filesToWatch.join(', '));
+    info('Watching following files/patterns:\n' + indent(filesToWatch).join('\n'));
 
     watcher.on('all', (event, path) => {
-      if (argv.verbose) console.log(`${path}\t[${event}]`);
+      if (argv.verbose) debug(`${path}\t[${event}]`);
       run(source, targets, sourcePkg);
     })
   });
 };
 
+const date = () => chalk.grey('[' + new Date().toLocaleTimeString() + ']');
+
+const debug = (wut) => console.log(date() + ' ' + chalk.grey(wut));
+const success = (wut) => console.log(date() + ' ' + chalk.green(wut));
+const info = (wut) => console.log(date() + ' ' + chalk.blue(wut));
+const warn = (wut) => console.warn(date() + ' ' + chalk.red(wut));
 // end of subroutines
 
 
@@ -183,12 +197,12 @@ const run = debounce((source, targets, sourcePkg) => {
       isRunning = false;
 
       if (shouldReRun) {
-        console.log('Package updated during copy, running again...');
+        info('Package updated during copy, running again...');
         shouldReRun = false;
         run(source, targets, sourcePkg);
         return;
       } else {
-        console.log(targets + ' updated with ' + source);
+        success(targets + ' updated with ' + source);
       }
     })
     .done();
@@ -203,7 +217,7 @@ if (hasInlineArgs) {
   links = gatherLinks(argv.input, argv.output);
 
   if (hasConfig) {
-    console.log(JSON.stringify(links));
+    log(JSON.stringify(links));
     process.exit(0);
   }
 } else if (hasConfig) {
