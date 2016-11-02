@@ -1,6 +1,6 @@
 {
   "name": "npm-synchronize",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A tool to ease development of dependant npm projects",
   "main": "bin/watch.js",
   "scripts": {

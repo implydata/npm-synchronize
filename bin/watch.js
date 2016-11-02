@@ -38,7 +38,7 @@ const argv = yargs
   .argv;
 
 
-// subroutines
+// Subroutines
 
 const areArgsConsistent = (input, output) => {
   if (!input || !output) return false;
@@ -156,19 +156,32 @@ const indent = function(lines, indentLevel=2) {
 };
 
 const watch = function(source, targets) {
+  var deferred = Q.defer();
+  var updateDeferred = Q.defer();
+
   let sourcePkg = loadJSON(pathUtils.resolve(source, 'package.json'));
 
   let filesToWatch = getFilesToWatch(source, sourcePkg);
   let watcher = chokidar.watch(filesToWatch, {ignored: /[\/\\]\./});
 
   watcher.on('ready', () => {
-    info('Watching following files/patterns:\n' + indent(filesToWatch).join('\n'));
+    info('Ready, watching following files/patterns:\n' + indent(filesToWatch).join('\n'));
+
+    deferred.resolve({
+      close: watcher.close.bind(watcher),
+      waitForUpdate: () => updateDeferred.promise
+    });
 
     watcher.on('all', (event, path) => {
       if (argv.verbose) debug(`${path}\t[${event}]`);
-      run(source, targets, sourcePkg);
+      run(source, targets, sourcePkg, (msg) => {
+        updateDeferred.resolve(msg);
+        updateDeferred = Q.defer();
+      });
     })
   });
+
+  return deferred.promise;
 };
 
 const date = () => chalk.grey('[' + new Date().toLocaleTimeString() + ']');
@@ -177,12 +190,14 @@ const debug = (wut) => console.log(date() + ' ' + chalk.grey(wut));
 const success = (wut) => console.log(date() + ' ' + chalk.green(wut));
 const info = (wut) => console.log(date() + ' ' + chalk.blue(wut));
 const warn = (wut) => console.warn(date() + ' ' + chalk.red(wut));
-// end of subroutines
+const log = (wut) => console.log(wut);
+// End of subroutines
 
 
+// Stateful stuff
 var isRunning = false;
 var shouldReRun = false;
-const run = debounce((source, targets, sourcePkg) => {
+const run = debounce((source, targets, sourcePkg, callback) => {
   if (isRunning) {
     shouldReRun = true;
     return;
@@ -190,7 +205,7 @@ const run = debounce((source, targets, sourcePkg) => {
 
   isRunning = true;
 
-  prepareTarBall(source)
+  return prepareTarBall(source)
     .then((tarBallPath) => extractTarBalls(targets, sourcePkg.name, tarBallPath))
     .then(removeTarBalls)
     .then(() => {
@@ -199,36 +214,42 @@ const run = debounce((source, targets, sourcePkg) => {
       if (shouldReRun) {
         info('Package updated during copy, running again...');
         shouldReRun = false;
-        run(source, targets, sourcePkg);
-        return;
+        return run(source, targets, sourcePkg, callback);
       } else {
-        success(targets + ' updated with ' + source);
+        let msg = targets + ' updated with ' + source;
+        success(msg);
+        callback(msg)
+        return;
       }
-    })
-    .done();
+    }).done();
 }, 100);
+// End of stateful stuff
 
-var links;
 
-var hasConfig = argv.config;
-var hasInlineArgs = areArgsConsistent(argv.input, argv.output);
+if (require.main === module) { // CLI
+  var links;
 
-if (hasInlineArgs) {
-  links = gatherLinks(argv.input, argv.output);
+  var hasConfig = argv.config;
+  var hasInlineArgs = areArgsConsistent(argv.input, argv.output);
 
-  if (hasConfig) {
-    log(JSON.stringify(links));
-    process.exit(0);
+  if (hasInlineArgs) {
+    links = gatherLinks(argv.input, argv.output);
+
+    if (hasConfig) {
+      log(JSON.stringify(links));
+      process.exit(0);
+    }
+  } else if (hasConfig) {
+    links = loadJSON(pathUtils.resolve('.', argv.config));
+  } else {
+    yargs.showHelp();
+    process.exit(1);
   }
-} else if (hasConfig) {
-  links = loadJSON(pathUtils.resolve('.', argv.config));
-} else {
-  yargs.showHelp();
-  process.exit(1);
+
+  for (source in links) {
+    watch(source, links[source]);
+  }
+
+} else { // When require'd from another script
+  module.exports = watch;
 }
-
-for (source in links) {
-  watch(source, links[source]);
-}
-
-

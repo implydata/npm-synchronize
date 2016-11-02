@@ -16,7 +16,7 @@ module.exports = {
       data = String(data);
       outputs.push(data);
 
-      if (data.startsWith('Watching files in')) {
+      if (data.indexOf('Ready') > -1) {
         startDeferred.resolve({
           kill: () => {
             process.kill();

@@ -48,29 +48,7 @@ afterEach(() => {
   return fileUtils.deletePath('.'); // === cwd
 });
 
-describe('File structure', () => {
-  it('should be created', () => {
-    return fileUtils.getFileContent('sourceA/package.json')
-      .should.eventually.equal('{"name":"sourceA","files":["build"],"version":"0.0.1"}');
-  });
-
-  it('should allow changes', () => {
-    let file = fileUtils.file('sourceA/package.json');
-
-    return file.setContent('POUET')
-      .then(() => file.getContent().should.eventually.equal('POUET'));
-  });
-});
-
-describe('Process', () => {
-  it('should start and stop', () => {
-    return startWatcher(executableName, ['-i', 'test/fixtures/sourceA', '-o', 'test/fixtures/targetA'])
-      .then((process) => process.kill())
-    ;
-  });
-});
-
-describe('Watcher', () => {
+describe('CLI', () => {
 
   describe('single watch', () => {
     var process;
