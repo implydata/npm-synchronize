@@ -10,6 +10,7 @@ const fs = require('fs')
 const debounce = require('lodash.debounce');
 const yargs = require('yargs');
 const chalk = require('chalk');
+const yesno = require('yesno');
 
 const argv = yargs
   .usage([
@@ -184,6 +185,36 @@ const watch = function(source, targets) {
   return deferred.promise;
 };
 
+const startFromConfigPath = function(path) {
+  const links = loadJSON(pathUtils.resolve('.', path));
+
+  for (source in links) {
+    watch(source, links[source]);
+  }
+}
+
+const tryToFindConfig = function() {
+  const jsonRegExp = /.*\.json$/;
+
+  fs.readdir('.', (err, files) => {
+    let jsons = files.filter(jsonRegExp.exec.bind(jsonRegExp));
+
+    if (jsons.length !== 1) {
+      // No possible config found
+      yargs.showHelp();
+      process.exit(1);
+    }
+
+    yesno.ask(`Wanna use ${jsons[0]} as a config file ? [Y/n]`, true, function(ok) {
+      if (ok) {
+        startFromConfigPath(jsons[0]);
+      } else {
+        process.exit(0);
+      }
+    });
+  });
+};
+
 const date = () => chalk.grey('[' + new Date().toLocaleTimeString() + ']');
 
 const debug = (wut) => console.log(date() + ' ' + chalk.grey(wut));
@@ -239,15 +270,14 @@ if (require.main === module) { // CLI
       log(JSON.stringify(links));
       process.exit(0);
     }
-  } else if (hasConfig) {
-    links = loadJSON(pathUtils.resolve('.', argv.config));
-  } else {
-    yargs.showHelp();
-    process.exit(1);
-  }
 
-  for (source in links) {
-    watch(source, links[source]);
+    for (source in links) {
+      watch(source, links[source]);
+    }
+  } else if (hasConfig) {
+    startFromConfigPath(argv.config);
+  } else {
+    tryToFindConfig();
   }
 
 } else { // When require'd from another script

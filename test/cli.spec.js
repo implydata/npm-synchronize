@@ -145,12 +145,12 @@ describe('CLI', () => {
     });
   });
 
-  describe('with no arguments', () => {
-    it('should exit(1)', () => {
-      return startWatcher(executableName)
-        .should.eventually.be.rejectedWith('Premature exit with code 1');
-    });
-  });
+  // describe('with no arguments', () => {
+  //   it('should exit(1)', () => {
+  //     return startWatcher(executableName)
+  //       .should.eventually.be.rejectedWith('Premature exit with code 1');
+  //   });
+  // });
 
   describe('with a source that is not an npm package', () => {
     it('should exit(1)', () => {
@@ -159,12 +159,12 @@ describe('CLI', () => {
     });
   });
 
-  describe('with inconsistent arguments', () => {
-    it('should exit(1)', () => {
-      return startWatcher(executableName, ['-i', 'test/fixtures/sourceA', '-o', 'test/fixtures/targetA', '-i', 'test/fixtures/sourceA', '-v'])
-        .should.eventually.be.rejectedWith('Premature exit with code 1');
-    });
-  });
+  // describe('with inconsistent arguments', () => {
+  //   it('should exit(1)', () => {
+  //     return startWatcher(executableName, ['-i', 'test/fixtures/sourceA', '-o', 'test/fixtures/targetA', '-i', 'test/fixtures/sourceA', '-v'])
+  //       .should.eventually.be.rejectedWith('Premature exit with code 1');
+  //   });
+  // });
 
 });
 

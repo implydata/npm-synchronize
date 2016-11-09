@@ -1,6 +1,6 @@
 {
   "name": "npm-synchronize",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "A tool to ease development of dependant npm projects",
   "main": "bin/watch.js",
   "scripts": {
@@ -25,7 +25,8 @@
     "q": "1.4.1",
     "rimraf": "2.5.4",
     "tar-fs": "1.13.2",
-    "yargs": "5.0.0"
+    "yargs": "5.0.0",
+    "yesno": "0.0.1"
   },
   "author": "sebastien@imply.io",
   "license": "MIT",
