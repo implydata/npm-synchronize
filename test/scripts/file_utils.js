@@ -21,9 +21,7 @@ const fileExists = (path) => {
   return (targetStats.isFile() || targetStats.isDirectory());
 };
 
-const createDir = (path) => {
-  if (fileExists(path)) throw new Error(path + ' already exists');
-
+const createDirForFile = (path) => {
   var deferred = Q.defer();
   mkdirp(pathUtils.dirname(path), (e) => e ? deferred.reject(e) : deferred.resolve());
   return deferred.promise;
@@ -37,7 +35,7 @@ const writeInFile = (path, content) => {
 
 const createFileWithContent = (path, content) => {
   if (fileExists(path)) throw new Error(path + ' already exists');
-  return createDir(path).then(() => writeInFile(path, content));
+  return createDirForFile(path).then(() => writeInFile(path, content));
 };
 
 const flattenFileStructure = (structure, path, files) => {
@@ -76,7 +74,7 @@ const inflateFileTree = (cwd, structure) => {
   var flatStructure = flattenFileStructure(structure);
   return Q.all(flatStructure.map(item => {
     let path = pathUtils.resolve(cwd, item.path);
-    if (item.isEmptyDirectory) return createDir(path);
+    if (item.isEmptyDirectory) return createDirForFile(path);
     return createFileWithContent(path, item.content);
   }));
 };
@@ -99,6 +97,8 @@ const changeFileContent = (cwd, path, content) => {
 
 module.exports = {
   setCwd: (cwd) => {
+    if (fileExists(cwd)) throw new Error(cwd + ' already exists');
+
     return {
       deletePath: (path) => deletePath(cwd, path),
       inflateFileTree: (path) => inflateFileTree(cwd, path),

@@ -2,7 +2,7 @@
 
 const pathUtils = require('path');
 const chokidar = require('chokidar');
-const exec = require('child_process').exec;
+const { exec, spawn } = require('child_process');
 const Q = require('q');
 const tar = require('tar-fs')
 const gunzip = require('gunzip-maybe');
@@ -25,6 +25,9 @@ const argv = yargs
 
   .alias('o', 'output')
   .describe('o', 'Output directory (must be a NPM package)')
+
+  .alias('u', 'post-update')
+  .describe('u', 'Post update hook')
 
   .alias('c', 'config')
   .describe('c', 'a JSON config file (if used with other arguments, will just output the generated config on stdin)')
@@ -104,7 +107,7 @@ const extractTarBall = (target, dependencyName, tarBallPath) => {
 };
 
 const extractTarBalls = (targets, dependencyName, tarBallPath) => {
-  return Q.all(targets.map(target => extractTarBall(target, dependencyName, tarBallPath)));
+  return Q.all(targets.map(({target}) => extractTarBall(target, dependencyName, tarBallPath)));
 };
 
 const removeTarBall = (tarBallPath) => {
@@ -126,24 +129,27 @@ const getFilesToWatch = (input, sourcePkg) => {
   return sourcePkg.files.map(f => pathUtils.resolve(input, f));
 }
 
-const addLink = function(links, source, target) {
+const addLink = function(links, source, target, postUpdate) {
   let targets = links[source] || [];
 
-  if (targets.indexOf(target) === -1) targets.push(target);
+  if (targets.indexOf(target) === -1) targets.push({target, postUpdate});
 
   links[source] = targets;
 };
 
-const gatherLinks = function(input, output) {
+const gatherLinks = function(input, output, postUpdate) {
   if (typeof input === 'string') {
     input = [input];
     output = [output];
+    postUpdate = [postUpdate];
   }
+
+  postUpdate = postUpdate || [];
 
   let links = {};
 
   input.forEach((source, i) => {
-    addLink(links, source, output[i]);
+    addLink(links, source, output[i], postUpdate[i]);
   });
 
   return links;
@@ -189,7 +195,11 @@ const startFromConfigPath = function(path) {
   const links = loadJSON(pathUtils.resolve('.', path));
 
   for (source in links) {
-    watch(source, links[source]);
+    watch(source, links[source].map(o => {
+      if (typeof o === 'string') return {target: o};
+
+      return o;
+    }));
   }
 }
 
@@ -213,6 +223,25 @@ const tryToFindConfig = function() {
       }
     });
   });
+};
+
+const runHook = function(hook) {
+  if (!hook) return;
+  spawn(hook, { shell: true, stdio: 'inherit' });
+};
+
+const dumpConfig = function(links) {
+  let cleanLinks = {};
+
+  for (source in links) {
+    cleanLinks[source] = links[source].map(o => {
+      if (o.postUpdate === undefined) return o.target;
+
+      return o;
+    });
+  }
+
+  log(JSON.stringify(cleanLinks));
 };
 
 const date = () => chalk.grey('[' + new Date().toLocaleTimeString() + ']');
@@ -247,7 +276,10 @@ const run = debounce((source, targets, sourcePkg, callback) => {
         shouldReRun = false;
         return run(source, targets, sourcePkg, callback);
       } else {
-        let msg = targets + ' updated with ' + source;
+        let msg = targets.map(t => t.target) + ' updated with ' + source;
+
+        targets.forEach(({postUpdate}) => runHook(postUpdate))
+
         success(msg);
         callback(msg)
         return;
@@ -264,10 +296,10 @@ if (require.main === module) { // CLI
   var hasInlineArgs = areArgsConsistent(argv.input, argv.output);
 
   if (hasInlineArgs) {
-    links = gatherLinks(argv.input, argv.output);
+    links = gatherLinks(argv.input, argv.output, argv.postUpdate);
 
     if (hasConfig) {
-      log(JSON.stringify(links));
+      dumpConfig(links)
       process.exit(0);
     }
 

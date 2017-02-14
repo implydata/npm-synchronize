@@ -3,7 +3,7 @@ var should = chai.should();
 var chaiAsPromised = require('chai-as-promised');
 chai.use(chaiAsPromised);
 
-const fileUtils = require('./scripts/file_utils').setCwd(__dirname + '/fixtures');
+const fileUtils = require('./scripts/file_utils').setCwd(__dirname + '/fixtures-file-utils');
 
 beforeEach(() => {
   return fileUtils.inflateFileTree({
@@ -30,9 +30,9 @@ beforeEach(() => {
       }
     },
     'config.json': JSON.stringify({
-      'test/fixtures/sourceA': [
-        'test/fixtures/targetA',
-        'test/fixtures/targetB'
+      'test/fixtures-file-utils/sourceA': [
+        'test/fixtures-file-utils/targetA',
+        'test/fixtures-file-utils/targetB'
       ]
     })
   });

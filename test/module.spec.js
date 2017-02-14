@@ -4,7 +4,7 @@ var should = chai.should();
 var chaiAsPromised = require('chai-as-promised');
 chai.use(chaiAsPromised);
 
-const fileUtils = require('./scripts/file_utils').setCwd(__dirname + '/fixtures');
+const fileUtils = require('./scripts/file_utils').setCwd(__dirname + '/fixtures-module');
 
 const watch = require('../bin/watch');
 
@@ -33,9 +33,9 @@ beforeEach(() => {
       }
     },
     'config.json': JSON.stringify({
-      'test/fixtures/sourceA': [
-        'test/fixtures/targetA',
-        'test/fixtures/targetB'
+      'test/fixtures-module/sourceA': [
+        'test/fixtures-module/targetA',
+        'test/fixtures-module/targetB'
       ]
     })
   });
@@ -50,7 +50,7 @@ describe('Module', () => {
 
   describe('single watch', () => {
     beforeEach((done) => {
-      watch('test/fixtures/sourceA', ['test/fixtures/targetA'])
+      watch('test/fixtures-module/sourceA', [{target: 'test/fixtures-module/targetA'}])
         .then(w => {
           watcher = w;
           done();

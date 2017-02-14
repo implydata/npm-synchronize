@@ -5,7 +5,7 @@ var chaiAsPromised = require('chai-as-promised');
 chai.use(chaiAsPromised);
 
 const { startWatcher, wait } = require('./scripts/process_utils');
-const fileUtils = require('./scripts/file_utils').setCwd(__dirname + '/fixtures');
+const fileUtils = require('./scripts/file_utils').setCwd(__dirname + '/fixtures-cli');
 
 // Trick to make sure the executable is published in bin
 const packageJSON = require('../package.json');
@@ -36,9 +36,9 @@ beforeEach(() => {
       }
     },
     'config.json': JSON.stringify({
-      'test/fixtures/sourceA': [
-        'test/fixtures/targetA',
-        'test/fixtures/targetB'
+      'test/fixtures-cli/sourceA': [
+        'test/fixtures-cli/targetA',
+        'test/fixtures-cli/targetB'
       ]
     })
   });
@@ -54,7 +54,7 @@ describe('CLI', () => {
     var process;
 
     beforeEach(() => {
-      return startWatcher(executableName, ['-i', 'test/fixtures/sourceA', '-o', 'test/fixtures/targetA', '-v'])
+      return startWatcher(executableName, ['-i', 'test/fixtures-cli/sourceA', '-o', 'test/fixtures-cli/targetA', '-v'])
         .then((p) => process = p);
     });
 
@@ -80,7 +80,7 @@ describe('CLI', () => {
     var process;
 
     beforeEach(() => {
-      return startWatcher(executableName, ['-i', 'test/fixtures/sourceA', '-o', 'test/fixtures/targetA', '-i', 'test/fixtures/sourceA', '-o', 'test/fixtures/targetB', '-v'])
+      return startWatcher(executableName, ['-i', 'test/fixtures-cli/sourceA', '-o', 'test/fixtures-cli/targetA', '-i', 'test/fixtures-cli/sourceA', '-o', 'test/fixtures-cli/targetB', '-v'])
         .then((p) => process = p);
     });
 
@@ -111,7 +111,7 @@ describe('CLI', () => {
     var process;
 
     beforeEach(() => {
-      return startWatcher(executableName, ['-c', 'test/fixtures/config.json', '-v'])
+      return startWatcher(executableName, ['-c', 'test/fixtures-cli/config.json', '-v'])
         .then((p) => process = p);
     });
 
@@ -140,31 +140,17 @@ describe('CLI', () => {
 
   describe('with both --config and inline input/output', () => {
     it('should ignore any config file and log the generated config', () => {
-      return startWatcher(executableName, ['-i', 'test/fixtures/sourceA', '-o', 'test/fixtures/targetA', '-c'])
-        .should.eventually.be.equal(`{"test/fixtures/sourceA":["test/fixtures/targetA"]}\n`);
+      return startWatcher(executableName, ['-i', 'test/fixtures-cli/sourceA', '-o', 'test/fixtures-cli/targetA', '-c'])
+        .should.eventually.be.equal(`{"test/fixtures-cli/sourceA":["test/fixtures-cli/targetA"]}\n`);
     });
   });
-
-  // describe('with no arguments', () => {
-  //   it('should exit(1)', () => {
-  //     return startWatcher(executableName)
-  //       .should.eventually.be.rejectedWith('Premature exit with code 1');
-  //   });
-  // });
 
   describe('with a source that is not an npm package', () => {
     it('should exit(1)', () => {
-      return startWatcher(executableName, ['-i', 'test/fixtures', '-o', 'test/fixtures/targetA', '-v'])
+      return startWatcher(executableName, ['-i', 'test/fixtures-cli', '-o', 'test/fixtures-cli/targetA', '-v'])
         .should.eventually.be.rejectedWith('Premature exit with code 1');
     });
   });
-
-  // describe('with inconsistent arguments', () => {
-  //   it('should exit(1)', () => {
-  //     return startWatcher(executableName, ['-i', 'test/fixtures/sourceA', '-o', 'test/fixtures/targetA', '-i', 'test/fixtures/sourceA', '-v'])
-  //       .should.eventually.be.rejectedWith('Premature exit with code 1');
-  //   });
-  // });
 
 });
 
