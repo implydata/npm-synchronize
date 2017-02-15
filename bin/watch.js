@@ -1,317 +1,252 @@
 #!/usr/bin/env node
-
-const pathUtils = require('path');
-const chokidar = require('chokidar');
-const { exec, spawn } = require('child_process');
-const Q = require('q');
-const tar = require('tar-fs')
-const gunzip = require('gunzip-maybe');
-const fs = require('fs')
-const debounce = require('lodash.debounce');
-const yargs = require('yargs');
-const chalk = require('chalk');
-const yesno = require('yesno');
-
-const argv = yargs
-  .usage([
+"use strict";
+var pathUtils = require("path");
+var chokidar = require("chokidar");
+var child_process_1 = require("child_process");
+var Q = require("q");
+var fs = require("fs");
+var yargs = require("yargs");
+var logger_1 = require("./logger");
+var tar = require('tar-fs');
+var gunzip = require('gunzip-maybe');
+var debounce = require('lodash.debounce');
+var yesno = require('yesno');
+;
+;
+;
+var argv = yargs
+    .usage([
     'Usage: $0 -i [PATH] -o [PATH]',
     '       $0 -c [PATH]',
     '       $0 -c -i [PATH] -o [PATH]'
-  ].join('\n'))
-  .example('$0 -i ../caladan -o ../im-pivot', 'Updates im-pivot each time caladan is built')
-
-  .alias('i', 'input')
-  .describe('i', 'Input directory (must be a NPM package)')
-
-  .alias('o', 'output')
-  .describe('o', 'Output directory (must be a NPM package)')
-
-  .alias('u', 'post-update')
-  .describe('u', 'Post update hook')
-
-  .alias('c', 'config')
-  .describe('c', 'a JSON config file (if used with other arguments, will just output the generated config on stdin)')
-
-  .boolean('verbose')
-  .alias('v', 'verbose')
-  .describe('v', 'Verbose')
-
-  .help('h')
-  .alias('h', 'help')
-
-  .argv;
-
-
-// Subroutines
-
-const areArgsConsistent = (input, output) => {
-  if (!input || !output) return false;
-
-  if (typeof input === 'string' && typeof output === 'string') return true;
-
-  if (typeof input !== typeof output) return false;
-
-  if (input.length !== output.length) return false;
-
-  return true;
+].join('\n'))
+    .example('$0 -i ../caladan -o ../im-pivot', 'Updates im-pivot each time caladan is built')
+    .alias('i', 'input')
+    .describe('i', 'Input directory (must be a NPM package)')
+    .alias('o', 'output')
+    .describe('o', 'Output directory (must be a NPM package)')
+    .alias('u', 'post-update')
+    .describe('u', 'Post update hook')
+    .alias('c', 'config')
+    .describe('c', 'a JSON config file (if used with other arguments, will just output the generated config on stdin)')
+    .boolean('verbose')
+    .alias('v', 'verbose')
+    .describe('v', 'Verbose')
+    .help('h')
+    .alias('h', 'help')
+    .argv;
+var areArgsConsistent = function (input, output) {
+    if (!input || !output)
+        return false;
+    if (typeof input === 'string' && typeof output === 'string')
+        return true;
+    if (typeof input !== typeof output)
+        return false;
+    if (input.length !== output.length)
+        return false;
+    return true;
 };
-
-const loadJSON = (path) => {
-  try {
-    return require(path);
-  } catch (e) {
-    throw new Error('Unable to read ' + path);
-  }
-}
-
-const prepareTarBall = (source) => {
-  if (!source) throw new Error('must have source');
-
-  const deferred = Q.defer();
-  exec('npm pack', {cwd: source}, (error, stdout, stderr) => {
-    if (error) throw error;
-    if (stderr) throw new Error(stderr);
-
-    const stdoutLines = String(stdout).split(/[\r\n]+/g);
-
-    // Remove last line if blank
-    if (stdoutLines[stdoutLines.length - 1] === '') stdoutLines.pop();
-
-    const tarballName = stdoutLines[stdoutLines.length - 1];
-    if (tarballName.indexOf('.tgz') === -1) throw new Error(`can not detect tarball name in stdout ${stdout}`);
-
-    var tarBallPath = pathUtils.resolve(source, tarballName);
-    deferred.resolve(tarBallPath);
-  });
-
-  return deferred.promise;
-};
-
-
-const extractTarBall = (target, dependencyName, tarBallPath) => {
-  const deferred = Q.defer();
-
-  fs.createReadStream(tarBallPath)
-    .pipe(gunzip())
-    .pipe(tar.extract(pathUtils.resolve(target, 'node_modules', dependencyName), {
-      map: (header) => {
-        header.name = header.name.replace(/^package\//, '');
-        return header;
-      }
-    }))
-    .on('error', () => deferred.reject())
-    .on('finish', () => deferred.resolve(tarBallPath))
-  ;
-
-  return deferred.promise;
-};
-
-const extractTarBalls = (targets, dependencyName, tarBallPath) => {
-  return Q.all(targets.map(({target}) => extractTarBall(target, dependencyName, tarBallPath)));
-};
-
-const removeTarBall = (tarBallPath) => {
-  const deferred = Q.defer();
-  fs.unlink(tarBallPath, () => deferred.resolve());
-  return deferred.promise;
-};
-
-const removeTarBalls = (paths) => {
-  return Q.all(paths.map(removeTarBall));
-}
-
-const getFilesToWatch = (input, sourcePkg) => {
-  if (!sourcePkg.files) {
-    warn(`Watching entire directory (${input}) for ${sourcePkg.name}, this might be hazardous...`);
-    return [pathUtils.resolve(input)];
-  }
-
-  return sourcePkg.files.map(f => pathUtils.resolve(input, f));
-}
-
-const addLink = function(links, source, target, postUpdate) {
-  let targets = links[source] || [];
-
-  if (targets.indexOf(target) === -1) targets.push({target, postUpdate});
-
-  links[source] = targets;
-};
-
-const gatherLinks = function(input, output, postUpdate) {
-  if (typeof input === 'string') {
-    input = [input];
-    output = [output];
-    postUpdate = [postUpdate];
-  }
-
-  postUpdate = postUpdate || [];
-
-  let links = {};
-
-  input.forEach((source, i) => {
-    addLink(links, source, output[i], postUpdate[i]);
-  });
-
-  return links;
-};
-
-const indent = function(lines, indentLevel=2) {
-  var spaces = '';
-  for (var i = 0; i < indentLevel; i++) spaces += ' ';
-
-  return lines.map(l => spaces + l);
-};
-
-const watch = function(source, targets) {
-  var deferred = Q.defer();
-  var updateDeferred = Q.defer();
-
-  let sourcePkg = loadJSON(pathUtils.resolve(source, 'package.json'));
-
-  let filesToWatch = getFilesToWatch(source, sourcePkg);
-  let watcher = chokidar.watch(filesToWatch, {ignored: /[\/\\]\./});
-
-  watcher.on('ready', () => {
-    info('Ready, watching following files/patterns:\n' + indent(filesToWatch).join('\n'));
-
-    deferred.resolve({
-      close: watcher.close.bind(watcher),
-      waitForUpdate: () => updateDeferred.promise
-    });
-
-    watcher.on('all', (event, path) => {
-      if (argv.verbose) debug(`${path}\t[${event}]`);
-      run(source, targets, sourcePkg, (msg) => {
-        updateDeferred.resolve(msg);
-        updateDeferred = Q.defer();
-      });
-    })
-  });
-
-  return deferred.promise;
-};
-
-const startFromConfigPath = function(path) {
-  const links = loadJSON(pathUtils.resolve('.', path));
-
-  for (source in links) {
-    watch(source, links[source].map(o => {
-      if (typeof o === 'string') return {target: o};
-
-      return o;
-    }));
-  }
-}
-
-const tryToFindConfig = function() {
-  const jsonRegExp = /.*\.json$/;
-
-  fs.readdir('.', (err, files) => {
-    let jsons = files.filter(jsonRegExp.exec.bind(jsonRegExp));
-
-    if (jsons.length !== 1) {
-      // No possible config found
-      yargs.showHelp();
-      process.exit(1);
+var loadJSON = function (path) {
+    try {
+        return require(path);
     }
-
-    yesno.ask(`Wanna use ${jsons[0]} as a config file ? [Y/n]`, true, function(ok) {
-      if (ok) {
-        startFromConfigPath(jsons[0]);
-      } else {
-        process.exit(0);
-      }
+    catch (e) {
+        throw new Error('Unable to read ' + path);
+    }
+};
+var prepareTarBall = function (source) {
+    if (!source)
+        throw new Error('must have source');
+    var deferred = Q.defer();
+    child_process_1.exec('npm pack', { cwd: source }, function (error, stdout, stderr) {
+        if (error)
+            throw error;
+        if (stderr)
+            throw new Error(stderr);
+        var stdoutLines = String(stdout).split(/[\r\n]+/g);
+        if (stdoutLines[stdoutLines.length - 1] === '')
+            stdoutLines.pop();
+        var tarballName = stdoutLines[stdoutLines.length - 1];
+        if (tarballName.indexOf('.tgz') === -1)
+            throw new Error("can not detect tarball name in stdout " + stdout);
+        var tarBallPath = pathUtils.resolve(source, tarballName);
+        deferred.resolve(tarBallPath);
     });
-  });
+    return deferred.promise;
 };
-
-const runHook = function(hook) {
-  if (!hook) return;
-  spawn(hook, { shell: true, stdio: 'inherit' });
+var extractTarBall = function (target, dependencyName, tarBallPath) {
+    var deferred = Q.defer();
+    fs.createReadStream(tarBallPath)
+        .pipe(gunzip())
+        .pipe(tar.extract(pathUtils.resolve(target, 'node_modules', dependencyName), {
+        map: function (header) {
+            header.name = header.name.replace(/^package\//, '');
+            return header;
+        }
+    }))
+        .on('error', function (e) { return deferred.reject(e); })
+        .on('finish', function () { return deferred.resolve(tarBallPath); });
+    return deferred.promise;
 };
-
-const dumpConfig = function(links) {
-  let cleanLinks = {};
-
-  for (source in links) {
-    cleanLinks[source] = links[source].map(o => {
-      if (o.postUpdate === undefined) return o.target;
-
-      return o;
+var extractTarBalls = function (targets, dependencyName, tarBallPath) {
+    return Q.all(targets.map(function (_a) {
+        var target = _a.target;
+        return extractTarBall(target, dependencyName, tarBallPath);
+    }));
+};
+var removeTarBall = function (tarBallPath) {
+    var deferred = Q.defer();
+    fs.unlink(tarBallPath, function () { return deferred.resolve(); });
+    return deferred.promise;
+};
+var removeTarBalls = function (paths) {
+    return Q.all(paths.map(removeTarBall));
+};
+var getFilesToWatch = function (input, sourcePkg) {
+    if (!sourcePkg.files) {
+        logger_1.warn("Watching entire directory (" + input + ") for " + sourcePkg.name + ", this might be hazardous...");
+        return [pathUtils.resolve(input)];
+    }
+    return sourcePkg.files.map(function (f) { return pathUtils.resolve(input, f); });
+};
+var addLink = function (links, source, target, postUpdate) {
+    var targets = links[source] || [];
+    if (targets.filter(function (t) { return t.target === target; }).length === 0)
+        targets.push({ target: target, postUpdate: postUpdate });
+    links[source] = targets;
+};
+var gatherLinks = function (input, output, postUpdate) {
+    if (typeof input === 'string')
+        input = [input];
+    if (typeof output === 'string')
+        output = [output];
+    if (typeof postUpdate === 'string')
+        postUpdate = [postUpdate];
+    postUpdate = postUpdate || [];
+    var links = {};
+    input.forEach(function (source, i) {
+        addLink(links, source, output[i], postUpdate[i]);
     });
-  }
-
-  log(JSON.stringify(cleanLinks));
+    return links;
 };
-
-const date = () => chalk.grey('[' + new Date().toLocaleTimeString() + ']');
-
-const debug = (wut) => console.log(date() + ' ' + chalk.grey(wut));
-const success = (wut) => console.log(date() + ' ' + chalk.green(wut));
-const info = (wut) => console.log(date() + ' ' + chalk.blue(wut));
-const warn = (wut) => console.warn(date() + ' ' + chalk.red(wut));
-const log = (wut) => console.log(wut);
-// End of subroutines
-
-
-// Stateful stuff
+var watch = function (source, targets) {
+    var deferred = Q.defer();
+    var updateDeferred = Q.defer();
+    var sourcePkg = loadJSON(pathUtils.resolve(source, 'package.json'));
+    var filesToWatch = getFilesToWatch(source, sourcePkg);
+    var watcher = chokidar.watch(filesToWatch, { ignored: /[\/\\]\./ });
+    watcher.on('ready', function () {
+        logger_1.info('Ready, watching following files/patterns:\n' + logger_1.indent(filesToWatch).join('\n'));
+        deferred.resolve({
+            close: watcher.close.bind(watcher),
+            waitForUpdate: function () { return updateDeferred.promise; }
+        });
+        watcher.on('all', function (event, path) {
+            if (argv.verbose)
+                logger_1.debug(path + "\t[" + event + "]");
+            run(source, targets, sourcePkg, function (msg) {
+                updateDeferred.resolve(msg);
+                updateDeferred = Q.defer();
+            });
+        });
+    });
+    return deferred.promise;
+};
+var startFromConfigPath = function (path) {
+    var config = { links: loadJSON(pathUtils.resolve('.', path)) };
+    for (var source in config.links) {
+        watch(source, config.links[source].map(function (o) {
+            if (typeof o === 'string')
+                return { target: o };
+            return o;
+        }));
+    }
+};
+var tryToFindConfig = function () {
+    var jsonRegExp = /.*\.json$/;
+    fs.readdir('.', function (err, files) {
+        var jsons = files.filter(jsonRegExp.exec.bind(jsonRegExp));
+        if (jsons.length !== 1) {
+            yargs.showHelp();
+            process.exit(1);
+        }
+        yesno.ask("Wanna use " + jsons[0] + " as a config file ? [Y/n]", true, function (ok) {
+            if (ok) {
+                startFromConfigPath(jsons[0]);
+            }
+            else {
+                process.exit(0);
+            }
+        });
+    });
+};
+var runHook = function (hook) {
+    if (!hook)
+        return;
+    child_process_1.spawn(hook, [], { shell: true, stdio: 'inherit' });
+};
+var dumpConfig = function (links) {
+    var cleanLinks = {};
+    for (var source in links) {
+        cleanLinks[source] = links[source].map(function (o) {
+            if (o.postUpdate === undefined)
+                return o.target;
+            return o;
+        });
+    }
+    logger_1.log(JSON.stringify(cleanLinks));
+};
 var isRunning = false;
 var shouldReRun = false;
-const run = debounce((source, targets, sourcePkg, callback) => {
-  if (isRunning) {
-    shouldReRun = true;
-    return;
-  }
-
-  isRunning = true;
-
-  return prepareTarBall(source)
-    .then((tarBallPath) => extractTarBalls(targets, sourcePkg.name, tarBallPath))
-    .then(removeTarBalls)
-    .then(() => {
-      isRunning = false;
-
-      if (shouldReRun) {
-        info('Package updated during copy, running again...');
-        shouldReRun = false;
-        return run(source, targets, sourcePkg, callback);
-      } else {
-        let msg = targets.map(t => t.target) + ' updated with ' + source;
-
-        targets.forEach(({postUpdate}) => runHook(postUpdate))
-
-        success(msg);
-        callback(msg)
+var run = debounce(function (source, targets, sourcePkg, callback) {
+    if (isRunning) {
+        shouldReRun = true;
         return;
-      }
+    }
+    isRunning = true;
+    return prepareTarBall(source)
+        .then(function (tarBallPath) { return extractTarBalls(targets, sourcePkg.name, tarBallPath); })
+        .then(removeTarBalls)
+        .then(function () {
+        isRunning = false;
+        if (shouldReRun) {
+            logger_1.info('Package updated during copy, running again...');
+            shouldReRun = false;
+            return run(source, targets, sourcePkg, callback);
+        }
+        else {
+            var msg = targets.map(function (t) { return t.target; }) + ' updated with ' + source;
+            targets.forEach(function (_a) {
+                var postUpdate = _a.postUpdate;
+                return runHook(postUpdate);
+            });
+            logger_1.success(msg);
+            callback(msg);
+            return;
+        }
     }).done();
 }, 100);
-// End of stateful stuff
-
-
-if (require.main === module) { // CLI
-  var links;
-
-  var hasConfig = argv.config;
-  var hasInlineArgs = areArgsConsistent(argv.input, argv.output);
-
-  if (hasInlineArgs) {
-    links = gatherLinks(argv.input, argv.output, argv.postUpdate);
-
-    if (hasConfig) {
-      dumpConfig(links)
-      process.exit(0);
+if (require.main === module) {
+    var links = void 0;
+    var hasConfig = argv.config;
+    var hasInlineArgs = areArgsConsistent(argv.input, argv.output);
+    if (hasInlineArgs) {
+        links = gatherLinks(argv.input, argv.output, argv.postUpdate);
+        if (hasConfig) {
+            dumpConfig(links);
+            process.exit(0);
+        }
+        for (var source in links) {
+            watch(source, links[source]);
+        }
     }
-
-    for (source in links) {
-      watch(source, links[source]);
+    else if (hasConfig) {
+        startFromConfigPath(argv.config);
     }
-  } else if (hasConfig) {
-    startFromConfigPath(argv.config);
-  } else {
-    tryToFindConfig();
-  }
-
-} else { // When require'd from another script
-  module.exports = watch;
+    else {
+        tryToFindConfig();
+    }
+}
+else {
+    module.exports = watch;
 }

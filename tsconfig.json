@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "noImplicitAny": true,
+    "noEmitOnError": true,
+    "declaration": false,
+    "removeComments": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "strictNullChecks": false,
+    "skipLibCheck": true,
+    "importHelpers": true,
+    "lib": ["dom", "es6"],
+    "target": "es5",
+    "module": "commonjs",
+    "rootDir": "src",
+    "outDir": "bin",
+    "moduleResolution": "node"
+  },
+  "include": [
+    "src/watch.ts"
+  ]
+}
