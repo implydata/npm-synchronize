@@ -19,15 +19,15 @@ let yesno = require('yesno');
 interface Link {
   target: string,
   postUpdate?: string;
-};
+}
 
 interface SloppyConfig {
   links: Lookup<(Link | string)[]>;
-};
+}
 
 interface Config {
   links: Lookup<Link[]>;
-};
+}
 
 interface PackageJSON {
   files: string[];
@@ -57,6 +57,9 @@ const argv = yargs
   .boolean('verbose')
   .alias('v', 'verbose')
   .describe('v', 'Verbose')
+
+  .boolean('once')
+  .describe('once', 'Once')
 
   .help('h')
   .alias('h', 'help')
@@ -288,7 +291,7 @@ const run = debounce((source: string, targets: Link[], sourcePkg: PackageJSON, c
         targets.forEach(({postUpdate}) => runHook(postUpdate))
 
         success(msg);
-        callback(msg)
+        callback && callback(msg)
         return;
       }
     }).done();
@@ -310,8 +313,14 @@ if (require.main === module) { // CLI
       process.exit(0);
     }
 
-    for (let source in links) {
-      watch(source, links[source]);
+    if (argv.once) {
+      for (let source in links) {
+        run(source, links[source], loadJSON(pathUtils.resolve(source, 'package.json')));
+      }
+    } else {
+      for (let source in links) {
+        watch(source, links[source]);
+      }
     }
   } else if (hasConfig) {
     startFromConfigPath(argv.config);

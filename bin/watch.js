@@ -11,9 +11,6 @@ var tar = require('tar-fs');
 var gunzip = require('gunzip-maybe');
 var debounce = require('lodash.debounce');
 var yesno = require('yesno');
-;
-;
-;
 var argv = yargs
     .usage([
     'Usage: $0 -i [PATH] -o [PATH]',
@@ -32,6 +29,8 @@ var argv = yargs
     .boolean('verbose')
     .alias('v', 'verbose')
     .describe('v', 'Verbose')
+    .boolean('once')
+    .describe('once', 'Once')
     .help('h')
     .alias('h', 'help')
     .argv;
@@ -221,7 +220,7 @@ var run = debounce(function (source, targets, sourcePkg, callback) {
                 return runHook(postUpdate);
             });
             logger_1.success(msg);
-            callback(msg);
+            callback && callback(msg);
             return;
         }
     }).done();
@@ -236,8 +235,15 @@ if (require.main === module) {
             dumpConfig(links);
             process.exit(0);
         }
-        for (var source in links) {
-            watch(source, links[source]);
+        if (argv.once) {
+            for (var source in links) {
+                run(source, links[source], loadJSON(pathUtils.resolve(source, 'package.json')));
+            }
+        }
+        else {
+            for (var source in links) {
+                watch(source, links[source]);
+            }
         }
     }
     else if (hasConfig) {
