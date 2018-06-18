@@ -6,7 +6,7 @@ import { exec, spawn } from 'child_process';
 import * as Q from 'q';
 import * as fs from 'fs';
 import * as yargs from 'yargs';
-import { Lookup, Fn } from '@implydata/beltful';
+import { Fn } from '@implydata/beltful';
 import { debug, success, info, warn, log, indent } from './logger';
 
 // Untyped stuff
@@ -22,11 +22,11 @@ interface Link {
 }
 
 interface SloppyConfig {
-  links: Lookup<(Link | string)[]>;
+  links: Record<string, (Link | string)[]>;
 }
 
 interface Config {
-  links: Lookup<Link[]>;
+  links: Record<string, Link[]>;
 }
 
 interface PackageJSON {
@@ -96,7 +96,6 @@ const prepareTarBall = (source: string): Q.Promise<string> => {
 
   exec('npm pack', {cwd: source}, (error, stdout, stderr) => {
     if (error) throw error;
-    if (stderr) throw new Error(stderr);
 
     const stdoutLines = String(stdout).split(/[\r\n]+/g);
 
@@ -155,7 +154,7 @@ const getFilesToWatch = (input: string, sourcePkg: PackageJSON): string[] => {
   return sourcePkg.files.map(f => pathUtils.resolve(input, f));
 }
 
-const addLink = function(links: Lookup<Link[]>, source: string, target: string, postUpdate: string) {
+const addLink = function(links: Record<string, Link[]>, source: string, target: string, postUpdate: string) {
   let targets = links[source] || [];
 
   if (targets.filter(t => t.target === target).length === 0) targets.push({target, postUpdate});
@@ -163,14 +162,14 @@ const addLink = function(links: Lookup<Link[]>, source: string, target: string, 
   links[source] = targets;
 };
 
-const gatherLinks = function(input: string | string[], output: string | string[], postUpdate: string | string[]): Lookup<Link[]> {
+const gatherLinks = function(input: string | string[], output: string | string[], postUpdate: string | string[]): Record<string, Link[]> {
   if (typeof input === 'string') input = [input];
   if (typeof output === 'string') output = [output];
   if (typeof postUpdate === 'string') postUpdate = [postUpdate];
 
   postUpdate = postUpdate || [];
 
-  let links: Lookup<Link[]> = {};
+  let links: Record<string, Link[]> = {};
 
   input.forEach((source, i) => {
     addLink(links, source, output[i], postUpdate[i]);
@@ -247,8 +246,8 @@ const runHook = function(hook: string) {
   spawn(hook, [], { shell: true, stdio: 'inherit' });
 };
 
-const dumpConfig = function(links: Lookup<Link[]>) {
-  let cleanLinks: Lookup<(Link | string)[]> = {};
+const dumpConfig = function(links: Record<string, Link[]>) {
+  let cleanLinks: Record<string, (Link | string)[]> = {};
 
   for (let source in links) {
     cleanLinks[source] = links[source].map(o => {
@@ -300,7 +299,7 @@ const run = debounce((source: string, targets: Link[], sourcePkg: PackageJSON, c
 
 
 if (require.main === module) { // CLI
-  let links: Lookup<Link[]>;
+  let links: Record<string, Link[]>;
 
   let hasConfig = argv.config;
   let hasInlineArgs = areArgsConsistent(argv.input, argv.output);

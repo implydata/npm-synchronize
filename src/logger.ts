@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import * as chalk from 'chalk';
+import chalk from 'chalk';
+
 
 const date = () => chalk.grey('[' + new Date().toLocaleTimeString() + ']');
 

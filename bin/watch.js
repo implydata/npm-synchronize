@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 var pathUtils = require("path");
 var chokidar = require("chokidar");
 var child_process_1 = require("child_process");
@@ -60,8 +61,6 @@ var prepareTarBall = function (source) {
     child_process_1.exec('npm pack', { cwd: source }, function (error, stdout, stderr) {
         if (error)
             throw error;
-        if (stderr)
-            throw new Error(stderr);
         var stdoutLines = String(stdout).split(/[\r\n]+/g);
         if (stdoutLines[stdoutLines.length - 1] === '')
             stdoutLines.pop();
