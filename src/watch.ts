@@ -3,11 +3,16 @@
 import * as pathUtils from 'path';
 import * as chokidar from 'chokidar';
 import { exec, spawn } from 'child_process';
+import * as path from 'path';
 import * as Q from 'q';
 import * as fs from 'fs';
 import * as yargs from 'yargs';
 import { Fn } from '@implydata/beltful';
 import { debug, success, info, warn, log, indent } from './logger';
+import * as updateNotifier from 'update-notifier';
+
+const pkg = require(path.resolve(__dirname, '../package.json'));
+updateNotifier({pkg}).notify();
 
 // Untyped stuff
 let tar = require('tar-fs');
