@@ -107,6 +107,7 @@ module.exports = {
 
       file: (path) => {
         return {
+          exists: () => fileExists(pathUtils.resolve(cwd, path)),
           getContent: () => getFileContent(cwd, path),
           setContent: (content) => changeFileContent(cwd, path, content)
         }

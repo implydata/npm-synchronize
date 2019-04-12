@@ -5,7 +5,7 @@ import * as chokidar from 'chokidar';
 import { exec, spawn } from 'child_process';
 import * as path from 'path';
 import * as Q from 'q';
-import * as fs from 'fs';
+import * as fs from 'fs-extra';
 import * as yargs from 'yargs';
 import { Fn } from '@implydata/beltful';
 import { debug, success, info, warn, log, indent } from './logger';
@@ -47,17 +47,29 @@ const argv = yargs
   ].join('\n'))
   .example('$0 -i ../caladan -o ../im-pivot', 'Updates im-pivot each time caladan is built')
 
-  .alias('i', 'input')
-  .describe('i', 'Input directory (must be a NPM package)')
+  .option('input', {
+    alias: 'i',
+    type: 'string',
+    describe: 'Input directory (must be a NPM package)'
+  })
 
-  .alias('o', 'output')
-  .describe('o', 'Output directory (must be a NPM package)')
+  .option('output', {
+    alias: 'o',
+    type: 'string',
+    describe: 'Output directory (must be a NPM package)'
+  })
 
-  .alias('u', 'post-update')
-  .describe('u', 'Post update hook')
+  .option('post-update', {
+    alias: 'u',
+    type: 'string',
+    describe: 'Post update hook'
+  })
 
-  .alias('c', 'config')
-  .describe('c', 'a JSON config file (if used with other arguments, will just output the generated config on stdin)')
+  .option('config', {
+    alias: 'c',
+    type: 'string',
+    describe: 'A JSON config file (if used with other arguments, will just output the generated config on stdin)'
+  })
 
   .boolean('verbose')
   .alias('v', 'verbose')
@@ -118,6 +130,21 @@ const prepareTarBall = (source: string): Q.Promise<string> => {
 };
 
 
+const removeTargetModule = (target: string, dependencyName: string, tarBallPath: string): Q.Promise<string> => {
+  const deferred = Q.defer<string>();
+
+  fs.remove(pathUtils.resolve(target, 'node_modules', dependencyName), err => {
+    console.log(err)
+    if (err) {
+      deferred.reject(err);
+    } else {
+      deferred.resolve();
+    }
+  });
+
+  return deferred.promise;
+};
+
 const extractTarBall = (target: string, dependencyName: string, tarBallPath: string): Q.Promise<string> => {
   const deferred = Q.defer<string>();
 
@@ -137,7 +164,10 @@ const extractTarBall = (target: string, dependencyName: string, tarBallPath: str
 };
 
 const extractTarBalls = (targets: Link[], dependencyName: string, tarBallPath: string): Q.Promise<string[]> => {
-  return Q.all(targets.map(({target}) => extractTarBall(target, dependencyName, tarBallPath)));
+  return Q.all(targets.map(({target}) => {
+    return removeTargetModule(target, dependencyName, tarBallPath)
+      .then(() => extractTarBall(target, dependencyName, tarBallPath));
+  }));
 };
 
 const removeTarBall = (tarBallPath: string): Q.Promise<void> => {
@@ -306,11 +336,11 @@ const run = debounce((source: string, targets: Link[], sourcePkg: PackageJSON, c
 if (require.main === module) { // CLI
   let links: Record<string, Link[]>;
 
-  let hasConfig = argv.config;
+  let hasConfig = argv.config != null;
   let hasInlineArgs = areArgsConsistent(argv.input, argv.output);
 
   if (hasInlineArgs) {
-    links = gatherLinks(argv.input, argv.output, argv.postUpdate);
+    links = gatherLinks(argv.input, argv.output, argv['post-update']);
 
     if (hasConfig) {
       dumpConfig(links)

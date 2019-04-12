@@ -19,7 +19,7 @@ beforeEach(() => {
       }
     },
     sourceB: {
-      'package.json': JSON.stringify({name: 'sourceA', files: ['build'], "version": "0.0.1"}),
+      'package.json': JSON.stringify({name: 'sourceB', files: ['build'], "version": "0.0.1"}),
       build: {
         fileB: 'another super file'
       }

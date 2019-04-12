@@ -6,7 +6,7 @@ var chokidar = require("chokidar");
 var child_process_1 = require("child_process");
 var path = require("path");
 var Q = require("q");
-var fs = require("fs");
+var fs = require("fs-extra");
 var yargs = require("yargs");
 var logger_1 = require("./logger");
 var updateNotifier = require("update-notifier");
@@ -23,14 +23,26 @@ var argv = yargs
     '       $0 -c -i [PATH] -o [PATH]'
 ].join('\n'))
     .example('$0 -i ../caladan -o ../im-pivot', 'Updates im-pivot each time caladan is built')
-    .alias('i', 'input')
-    .describe('i', 'Input directory (must be a NPM package)')
-    .alias('o', 'output')
-    .describe('o', 'Output directory (must be a NPM package)')
-    .alias('u', 'post-update')
-    .describe('u', 'Post update hook')
-    .alias('c', 'config')
-    .describe('c', 'a JSON config file (if used with other arguments, will just output the generated config on stdin)')
+    .option('input', {
+    alias: 'i',
+    type: 'string',
+    describe: 'Input directory (must be a NPM package)'
+})
+    .option('output', {
+    alias: 'o',
+    type: 'string',
+    describe: 'Output directory (must be a NPM package)'
+})
+    .option('post-update', {
+    alias: 'u',
+    type: 'string',
+    describe: 'Post update hook'
+})
+    .option('config', {
+    alias: 'c',
+    type: 'string',
+    describe: 'A JSON config file (if used with other arguments, will just output the generated config on stdin)'
+})
     .boolean('verbose')
     .alias('v', 'verbose')
     .describe('v', 'Verbose')
@@ -76,6 +88,19 @@ var prepareTarBall = function (source) {
     });
     return deferred.promise;
 };
+var removeTargetModule = function (target, dependencyName, tarBallPath) {
+    var deferred = Q.defer();
+    fs.remove(pathUtils.resolve(target, 'node_modules', dependencyName), function (err) {
+        console.log(err);
+        if (err) {
+            deferred.reject(err);
+        }
+        else {
+            deferred.resolve();
+        }
+    });
+    return deferred.promise;
+};
 var extractTarBall = function (target, dependencyName, tarBallPath) {
     var deferred = Q.defer();
     fs.createReadStream(tarBallPath)
@@ -93,7 +118,8 @@ var extractTarBall = function (target, dependencyName, tarBallPath) {
 var extractTarBalls = function (targets, dependencyName, tarBallPath) {
     return Q.all(targets.map(function (_a) {
         var target = _a.target;
-        return extractTarBall(target, dependencyName, tarBallPath);
+        return removeTargetModule(target, dependencyName, tarBallPath)
+            .then(function () { return extractTarBall(target, dependencyName, tarBallPath); });
     }));
 };
 var removeTarBall = function (tarBallPath) {
@@ -230,10 +256,10 @@ var run = debounce(function (source, targets, sourcePkg, callback) {
 }, 100);
 if (require.main === module) {
     var links = void 0;
-    var hasConfig = argv.config;
+    var hasConfig = argv.config != null;
     var hasInlineArgs = areArgsConsistent(argv.input, argv.output);
     if (hasInlineArgs) {
-        links = gatherLinks(argv.input, argv.output, argv.postUpdate);
+        links = gatherLinks(argv.input, argv.output, argv['post-update']);
         if (hasConfig) {
             dumpConfig(links);
             process.exit(0);

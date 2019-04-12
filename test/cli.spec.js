@@ -21,7 +21,12 @@ beforeEach(() => {
     },
     targetA: {
       node_modules: {
-        awesomePackage: {}
+        awesomePackage: {},
+        sourceA: {
+          build: {
+            extraFile0: 'This file should be removed by npm-sync'
+          }
+        }
       }
     },
     sourceB: {
@@ -71,6 +76,11 @@ describe('CLI', () => {
           return fileUtils.file('targetA/node_modules/sourceA/build/fileA')
             .getContent()
             .should.eventually.equal('POUET');
+        })
+        .then(() => {
+          return fileUtils.file('targetA/node_modules/sourceA/build/extraFile0')
+            .exists()
+            .should.equal(false);
         })
       ;
     });
