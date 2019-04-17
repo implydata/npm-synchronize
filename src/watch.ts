@@ -134,7 +134,6 @@ const removeTargetModule = (target: string, dependencyName: string, tarBallPath:
   const deferred = Q.defer<string>();
 
   fs.remove(pathUtils.resolve(target, 'node_modules', dependencyName), err => {
-    console.log(err)
     if (err) {
       deferred.reject(err);
     } else {
