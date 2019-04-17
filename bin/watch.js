@@ -91,7 +91,6 @@ var prepareTarBall = function (source) {
 var removeTargetModule = function (target, dependencyName, tarBallPath) {
     var deferred = Q.defer();
     fs.remove(pathUtils.resolve(target, 'node_modules', dependencyName), function (err) {
-        console.log(err);
         if (err) {
             deferred.reject(err);
         }
